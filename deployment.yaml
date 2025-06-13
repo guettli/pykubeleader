@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pykubeleader
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pykubeleader
+  template:
+    metadata:
+      labels:
+        app: pykubeleader
+    spec:
+      serviceAccountName: pykubeleader
+      containers:
+      - name: pykubeleader
+        image: ghcr.io/syself/pykubeleader:latest
+        imagePullPolicy: Always
+        args:
+          - python
+          - main.py
+          - "$(POD_NAME)"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - containerPort: 80

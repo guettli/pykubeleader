@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import sys
 import uuid
 from kubernetes import config
 from kubernetes.leaderelection import leaderelection
@@ -24,11 +25,17 @@ import signal
 import threading
 
 
+import logging
+
+
 # The function that a user wants to run once a candidate is elected as a leader
 class Singleton:
+    def __init__(self, pod_name):
+        self.pod_name = pod_name
+
     def start(self):
         alive = random.uniform(5, 10)
-        print("I am leader. Working for {} seconds...".format(alive))
+        logging.info("I am leader. Working for {} seconds...".format(alive))
 
         # Stop the current process after 'alive' seconds without blocking
         pid = os.getpid()
@@ -40,32 +47,56 @@ class Singleton:
         t.start()
 
     def stop(self):
-        print("I am no longer the leader. Stopping ...")
+        logging.info("I am no longer the leader. Stopping ...")
         os.exit(0)
 
 
-def main():
+def usage():
+    print(
+        """Usage: %s pod-name
 
+This script demonstrates leader election in Kubernetes using a ConfigMap lock.
+Ensure you have a valid kubeconfig file set in the KUBECONFIG environment variable.
+"""
+        % sys.argv[0],
+    )
+
+
+def main():
+    if len(sys.argv) != 2:
+        usage()
+        sys.exit(1)
+    pod_name = sys.argv[1].strip()
     # Authenticate using config file
-    kubeconfig = os.environ.get("KUBECONFIG", "~/.kube/config")
-    if kubeconfig.startswith("~"):
-        kubeconfig = os.path.expanduser(kubeconfig)
-    if not os.path.exists(kubeconfig):
-        raise FileNotFoundError(
-            f"Kubeconfig file not found at {kubeconfig} (use env var KUBECONFIG)"
-        )
-    config.load_kube_config(kubeconfig)
+    kubeconfig = os.environ.get("KUBECONFIG")
+    if kubeconfig:
+        if not os.path.exists(kubeconfig):
+            raise FileNotFoundError(
+                f"Kubeconfig file not found at {kubeconfig} (use env var KUBECONFIG)"
+            )
+        print(f"Using kubeconfig file: {kubeconfig}")
+        config.load_kube_config(kubeconfig)
+    else:
+        print("Using in-cluster configuration")
+        config.load_incluster_config()
 
     # Parameters required from the user
 
     # A unique identifier for this candidate
     candidate_id = uuid.uuid4()
     # Name of the lock object to be created
-    lock_name = "python-kube-leader-election-example"  # TODO Change that!
+    lock_name = "pykubeleader-example"  # TODO Change that!
+
+    # Configure logging
+    logging.basicConfig(
+        format=f"{pod_name} %(asctime)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
+        force=True,
+    )
 
     # Kubernetes namespace
     lock_namespace = "default"
-    singleton = Singleton()
+    singleton = Singleton(pod_name)
     # Create config
     c = electionconfig.Config(
         ConfigMapLock(lock_name, lock_namespace, candidate_id),
@@ -80,7 +111,7 @@ def main():
     leaderelection.LeaderElection(c).run()
 
     # User can choose to do another round of election or simply exit
-    print("Exited leader election")
+    logging.info("Exited leader election")
 
 
 if __name__ == "__main__":
