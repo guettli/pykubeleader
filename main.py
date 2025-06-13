@@ -19,10 +19,6 @@ from kubernetes import config
 from kubernetes.leaderelection import leaderelection
 from kubernetes.leaderelection.resourcelock.configmaplock import ConfigMapLock
 from kubernetes.leaderelection import electionconfig
-import time
-import random
-import signal
-import threading
 
 
 import logging
@@ -34,21 +30,11 @@ class Singleton:
         self.pod_name = pod_name
 
     def start(self):
-        alive = random.uniform(5, 10)
-        logging.info("I am leader. Working for {} seconds...".format(alive))
-
-        # Stop the current process after 'alive' seconds without blocking
-        pid = os.getpid()
-
-        def terminate_process():
-            os.kill(pid, signal.SIGTERM)
-
-        t = threading.Timer(alive, terminate_process)
-        t.start()
+        logging.info("I am leader.")
 
     def stop(self):
         logging.info("I am no longer the leader. Stopping ...")
-        os.exit(0)
+        sys.exit(0)
 
 
 def usage():
@@ -88,8 +74,9 @@ def main():
     lock_name = "pykubeleader-example"  # TODO Change that!
 
     # Configure logging
+    canditate_short = str(candidate_id).split("-")[0]
     logging.basicConfig(
-        format=f"{pod_name} %(asctime)s - %(levelname)s - %(message)s",
+        format=f"%(asctime)s pod={pod_name} canditate={canditate_short} - %(levelname)s - %(message)s",
         level=logging.INFO,
         force=True,
     )
